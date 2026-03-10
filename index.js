@@ -1,4 +1,8 @@
-const { Client, GatewayIntentBits, Partials, PermissionFlagsBits } = require('discord.js');
+/**
+ * BACKDOOR SERVER CORE
+ * Role: Handles Discord Bot events, User Sessions, and Webhook dispatching.
+ */
+const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 const { createClient } = require('@supabase/supabase-js');
 const express = require('express');
 const session = require('express-session');
@@ -9,15 +13,12 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// Replit 세션 설정
+// [SESSION MANAGEMENT] Keeps the user logged in for 24 hours
 app.use(session({ 
-    secret: 'replit-backdoor-auth-v1', 
+    secret: 'backdoor-omega-v11-ultra-secret', 
     resave: false, 
     saveUninitialized: false,
-    cookie: { 
-        secure: false, // Replit 무료 티어는 HTTP 환경일 수 있어 false 권장
-        maxAge: 1000 * 60 * 60 * 24 
-    } 
+    cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 } 
 }));
 
 const SUPABASE_URL = process.env['SUPABASE_URL']?.trim();
@@ -26,95 +27,121 @@ const DISCORD_TOKEN = process.env['DISCORD_TOKEN']?.trim();
 const CLIENT_ID = process.env['DISCORD_CLIENT_ID']?.trim();
 const CLIENT_SECRET = process.env['DISCORD_CLIENT_SECRET']?.trim();
 
-// [중요] Replit 주소로 변경 필요 (예: https://프로젝트이름.본인아이디.repl.co/auth/callback)
-const REDIRECT_URI = `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co/auth/callback`;
+const REDIRECT_URI = "https://the-backdoor--choigeonhwi0603.replit.app/auth/callback";
 const FIXED_SERVER_ID = '1464312221591933014'; 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const client = new Client({ 
     intents: [
-        GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, 
-        GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers
-    ]
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent, 
+        GatewayIntentBits.GuildMembers 
+    ] 
 });
 
-const formatName = (n) => n ? n.trim().toLowerCase() : "";
+// [BOT EVENT: MESSAGE SYNC] Captures Discord messages and mirrors them to Supabase DB
+client.on('messageCreate', async (message) => {
+    if (message.author.bot && message.webhookId === null) return;
+    if (message.guildId !== FIXED_SERVER_ID) return;
 
+    try {
+        await supabase.from('messages').insert({
+            message_id: message.id,
+            channel_id: message.channelId,
+            username: message.author.username,
+            // Capture text content or the first attachment URL if text is empty
+            content: message.content || (message.attachments.size > 0 ? message.attachments.first().url : ""),
+            is_discord: true,
+            avatar_url: message.author.displayAvatarURL({ extension: 'png', size: 128 }),
+            created_at: new Date(message.createdTimestamp).toISOString()
+        });
+    } catch (e) { console.error("Database Sync Error:", e.message); }
+});
+
+// [AUTH: LOGIN] Redirects user to Discord Authorization page
 app.get('/auth/login', (req, res) => {
     const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
     res.redirect(url);
 });
 
+// [AUTH: CALLBACK] Handles token exchange and user profile retrieval
 app.get('/auth/callback', async (req, res) => {
     const code = req.query.code;
-    if (!code) return res.status(400).send("No code provided.");
     try {
         const tokenRes = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
-            client_id: CLIENT_ID, 
-            client_secret: CLIENT_SECRET, 
-            grant_type: 'authorization_code', 
-            code, 
-            redirect_uri: REDIRECT_URI,
+            client_id: CLIENT_ID, client_secret: CLIENT_SECRET, 
+            grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI,
         }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
 
         const userRes = await axios.get('https://discord.com/api/users/@me', { 
             headers: { Authorization: `Bearer ${tokenRes.data.access_token}` } 
         });
-        
-        const finalUser = formatName(userRes.data.username);
-        await supabase.from('users').upsert({ username: finalUser, discord_id: userRes.data.id, avatar: userRes.data.avatar });
 
-        req.session.user = { username: finalUser, id: userRes.data.id, avatar: userRes.data.avatar };
+        const { id, username, avatar } = userRes.data;
+        const avatarURL = avatar ? `https://cdn.discordapp.com/avatars/${id}/${avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png";
+
+        req.session.user = { username: username.toLowerCase(), id, avatar, avatarURL };
         req.session.save(() => res.redirect('/'));
-    } catch (e) {
-        res.status(500).send("Login Failed.");
-    }
+    } catch (e) { res.status(500).send("Login Failed: " + e.message); }
 });
 
+// [AUTH: LOGOUT] Destroys the session
+app.get('/auth/logout', (req, res) => {
+    req.session.destroy(() => res.redirect('/'));
+});
+
+// [API: SYSTEM DATA] Provides configuration and session info to the frontend
 app.get('/session', (req, res) => res.json(req.session.user || null));
 app.get('/supabase-config', (req, res) => res.json({ url: SUPABASE_URL, key: SUPABASE_KEY }));
 
+// [API: CHANNELS] Fetches available text channels from the specific Discord Server
 app.get('/get-channels', async (req, res) => {
     if (!req.session.user) return res.json({ channels: [] });
-    const myName = formatName(req.session.user.username);
-    const { data: permissions } = await supabase.from('channel_permissions').select('channel_id').eq('username', myName);
-    if (!permissions) return res.json({ channels: [] });
-    
-    const guild = await client.guilds.fetch(FIXED_SERVER_ID);
-    const allChannels = await guild.channels.fetch();
-    const filtered = allChannels.filter(c => c && c.type === 0 && permissions.some(p => p.channel_id === c.id)).map(c => ({ id: c.id, name: c.name }));
-    res.json({ channels: filtered });
+    try {
+        const guild = await client.guilds.fetch(FIXED_SERVER_ID);
+        const member = await guild.members.fetch(req.session.user.id);
+        const channels = await guild.channels.fetch();
+        const filtered = channels
+            .filter(c => c && c.type === 0 && c.permissionsFor(member).has(PermissionsBitField.Flags.ViewChannel))
+            .map(c => ({ id: c.id, name: c.name }));
+        res.json({ channels: filtered });
+    } catch (e) { res.json({ channels: [] }); }
 });
 
+// [API: MESSAGES] Retrieves historical messages from Supabase
 app.get('/get-messages', async (req, res) => {
     const { channelId } = req.query;
     const { data: msgs } = await supabase.from('messages').select('*').eq('channel_id', channelId).order('created_at', { ascending: true });
-    const { data: users } = await supabase.from('users').select('username, avatar, discord_id');
-    const userMap = {};
-    if (users) users.forEach(u => userMap[u.username] = u);
-    res.json({ messages: (msgs || []).map(m => ({ ...m, avatar: userMap[m.username]?.avatar, discord_id: userMap[m.username]?.discord_id })) });
+    res.json({ messages: msgs || [] });
 });
 
+// [API: SEND] Dispatches messages via Webhooks to Discord
 app.post('/send', async (req, res) => {
     if (!req.session.user) return res.status(401).send();
-    const { content, channelId } = req.body;
-    const { username, id: discordId, avatar } = req.session.user;
-    
-    const channel = await client.channels.fetch(channelId);
-    const webhooks = await channel.fetchWebhooks();
-    let webhook = webhooks.find(wh => wh.owner.id === client.user.id) || await channel.createWebhook({ name: 'Backdoor' });
-    
-    const avatarURL = avatar ? `https://cdn.discordapp.com/avatars/${discordId}/${avatar}.png` : null;
-    const sentMsg = await webhook.send({ content, username, avatarURL });
-    
-    await supabase.from('messages').insert({ message_id: sentMsg.id, username, content, channel_id: channelId, is_discord: false });
-    res.json({ success: true });
+    const { content, channelId, imageUrl } = req.body;
+    try {
+        const channel = await client.channels.fetch(channelId);
+        const webhooks = await channel.fetchWebhooks();
+        let webhook = webhooks.find(wh => wh.owner.id === client.user.id) || await channel.createWebhook({ name: 'Backdoor' });
+
+        const payload = { 
+            username: req.session.user.username, 
+            avatarURL: req.session.user.avatarURL 
+        };
+
+        if (imageUrl) {
+            payload.content = content || ""; 
+            payload.files = [imageUrl]; 
+        } else {
+            payload.content = content;
+        }
+
+        await webhook.send(payload);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-client.on('messageCreate', async (m) => {
-    if (m.author.bot) return;
-    await supabase.from('messages').upsert({ message_id: m.id, username: formatName(m.author.username), content: m.content, is_discord: true, channel_id: m.channel.id });
-});
-
+client.once('ready', () => console.log('THE BACKDOOR - Bot status: ONLINE'));
 client.login(DISCORD_TOKEN);
-app.listen(8080, () => console.log('Replit Server Running...'));
+app.listen(3000, '0.0.0.0');
