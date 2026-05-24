@@ -3,48 +3,348 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>THE BACKDOOR</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <title>The Backdoor - Control Panel</title>
+    <style>
+        /* ====================================================================
+         * GLOBAL & RESET STYLES
+         * Role: Standardizes sizing behavior and sets the core dark-theme color profile (Discord-like canvas).
+         * ==================================================================== */
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0; background-color: #1e1f22; color: #dbdee1;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh;
+        }
+
+        /* ====================================================================
+         * SIDEBAR LAYOUT
+         * Role: Allocates a structural 260px left panel for user status, profile mappings, and available channel list.
+         * ==================================================================== */
+        .sidebar {
+            width: 260px; background-color: #2b2d31; display: flex; flex-direction: column; border-right: 1px solid #1f2023;
+        }
+        .profile-section {
+            padding: 15px; background-color: #232428; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #1f2023;
+        }
+        .profile-section img { width: 38px; height: 38px; border-radius: 50%; background: #404249; }
+        .profile-info { flex-grow: 1; overflow: hidden; }
+        .profile-name { font-weight: bold; font-size: 14px; color: #f2f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .btn-logout { font-size: 11px; color: #f04747; text-decoration: none; cursor: pointer; }
+        .btn-logout:hover { text-decoration: underline; }
+
+        /* ====================================================================
+         * NAVIGATION & CHANNELS COMPONENT
+         * Role: Formats interactive channel nodes with an absolute text-overflow wrap.
+         * ==================================================================== */
+        .channel-list { flex-grow: 1; padding: 10px; overflow-y: auto; }
+        .channel-item {
+            padding: 8px 12px; border-radius: 4px; margin-bottom: 4px; cursor: pointer;
+            font-size: 14px; color: #949ba4; display: flex; align-items: center; gap: 6px;
+        }
+        .channel-item::before { content: "#"; font-size: 16px; color: #80848e; }
+        .channel-item:hover, .channel-item.active { background-color: #35373c; color: #f2f3f5; }
+
+        /* ====================================================================
+         * MAIN CHAT CANVAS & HEADERS
+         * Role: Expands dynamically to hold the full historical message viewport and the functional input matrix.
+         * ==================================================================== */
+        .main-chat { flex-grow: 1; display: flex; flex-direction: column; background-color: #313338; }
+        .chat-header {
+            height: 48px; padding: 0 16px; display: flex; align-items: center;
+            background-color: #313338; border-bottom: 1px solid #1f2023; font-weight: bold; color: #f2f3f5;
+        }
+
+        /* ====================================================================
+         * MESSAGE STREAM DOM
+         * Role: Implements a clean message feed block, packing flex bounds to handle user text grids and image payloads.
+         * ==================================================================== */
+        .message-area { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+        .msg-row { display: flex; gap: 16px; align-items: flex-start; }
+        .msg-avatar { width: 40px; height: 40px; border-radius: 50%; background: #404249; flex-shrink: 0; }
+        .msg-content-box { display: flex; flex-direction: column; }
+        .msg-meta { display: flex; align-items: center; gap: 8px; }
+        .msg-user { font-weight: 500; font-size: 14px; color: #f2f3f5; }
+        .msg-time { font-size: 11px; color: #949ba4; }
+        .msg-text { font-size: 15px; color: #dbdee1; margin-top: 4px; word-break: break-all; }
+        .msg-media { margin-top: 6px; max-width: 300px; max-height: 300px; border-radius: 6px; border: 1px solid #23272a; }
+
+        /* ====================================================================
+         * CONTROL INPUT MATRIX
+         * Role: Locks message input field and secondary attachment configuration layer at the container base.
+         * ==================================================================== */
+        .input-area { padding: 0 20px 24px 20px; background-color: #313338; }
+        .input-wrapper {
+            background-color: #383a40; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px;
+        }
+        .input-row { display: flex; gap: 10px; width: 100%; }
+        .chat-input {
+            flex-grow: 1; background: transparent; border: none; color: #dbdee1; font-size: 15px; outline: none;
+        }
+        .url-input {
+            background: #2b2d31; border: 1px solid #23272a; border-radius: 4px; color: #dbdee1;
+            font-size: 12px; padding: 4px 8px; outline: none; width: 100%;
+        }
+        .btn-send {
+            background-color: #248046; color: white; border: none; padding: 6px 16px;
+            border-radius: 4px; font-weight: 500; cursor: pointer; font-size: 14px;
+        }
+        .btn-send:hover { background-color: #1a6535; }
+    </style>
 </head>
 <body>
-    <div id="login-page" class="flex-center">
-        <div class="login-container">
-            <h1 class="main-logo">THE BACKDOOR</h1>
-            <p class="author-tag">by Justin</p>
-            <button class="discord-btn" onclick="location.href='/auth/login'">Login with Discord</button>
+
+<div class="sidebar">
+    <div class="profile-section">
+        <img id="userAvatar" src="" alt="Avatar">
+        <div class="profile-info">
+            <div class="profile-name" id="profileName">Loading...</div>
+            <a href="/auth/logout" class="btn-logout">Logout</a>
         </div>
-        <div class="footer-contact">choigeonhwi0603@gmail.com</div>
     </div>
+    <div class="channel-list" id="channelContainer"></div>
+</div>
 
-    <div id="main-app" style="display:none;">
-        <nav id="sidebar">
-            <div class="sidebar-header">CHANNELS</div>
-            <ul id="channel-list"></ul>
-            
-            <div id="user-section">
-                <div id="user-panel" onclick="toggleLogoutMenu(event)">
-                    <img id="user-avatar" src="" alt="User">
-                    <span id="user-name"></span>
-                </div>
-                <div id="logout-dropdown" class="dropdown-hidden">
-                    <button onclick="location.href='/auth/logout'">Logout</button>
-                </div>
+<div class="main-chat">
+    <div class="chat-header" id="currentChannelName">Select a Channel</div>
+    <div class="message-area" id="messageContainer"></div>
+    <div class="input-area">
+        <div class="input-wrapper">
+            <div class="input-row">
+                <input type="text" class="chat-input" id="messageInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendMessage()">
+                <button class="btn-send" onclick="sendMessage()">Send</button>
             </div>
-        </nav>
-
-        <main id="chat-container">
-            <header id="chat-header">Select a Channel</header>
-            <div id="message-list"></div>
-            
-            <footer id="input-bar">
-                <input type="file" id="image-input" accept="image/*" style="display:none;">
-                <button id="upload-btn" onclick="document.getElementById('image-input').click()">📷</button>
-                <input type="text" id="message-input" placeholder="Type a message...">
-                <button id="send-btn">Send</button>
-            </footer>
-        </main>
+            <input type="text" class="url-input" id="imageInput" placeholder="Optional Image URL">
+        </div>
     </div>
-    <script src="script.js"></script>
+</div>
+
+<script>
+    // ====================================================================
+    // GLOBAL RUNTIME STORAGE POINTERS
+    // Role: Tracks session contexts, incremental row IDs, and filters duplicates.
+    // ====================================================================
+    let currentUser = null;
+    let activeChannelId = null;
+    let pollingScheduler = null;
+    let maxTrackedRowId = 0; // Absolute incremental tracking cursor matching database Primary Keys
+    
+    // De-duplication set targeting local optimistic echoes vs inbound network fetches
+    const sentContentsLog = new Set();
+
+    // ====================================================================
+    // INTERFACE INITIATION MATRIX (init)
+    // Role: Validates user cookies on mount; forces fallback route on authorization mismatch.
+    // ====================================================================
+    async function init() {
+        const sessionRes = await fetch('/session');
+        currentUser = await sessionRes.json();
+        
+        if (!currentUser) {
+            window.location.href = "/login.html";
+            return;
+        }
+
+        document.getElementById('userAvatar').src = currentUser.avatarURL;
+        document.getElementById('profileName').innerText = currentUser.displayName;
+
+        await loadChannels();
+    }
+
+    // ====================================================================
+    // INTERFACE MANIPULATION: CHANNEL LOADING (/get-channels)
+    // Role: Requests structural list arrays from server endpoints and binds execution event handlers.
+    // ====================================================================
+    async function loadChannels() {
+        const res = await fetch('/get-channels');
+        const data = await res.json();
+        const container = document.getElementById('channelContainer');
+        container.innerHTML = '';
+
+        if(data.channels && data.channels.length > 0) {
+            data.channels.forEach(ch => {
+                const el = document.createElement('div');
+                el.className = 'channel-item';
+                el.innerText = ch.name;
+                el.onclick = () => selectChannel(ch.id, ch.name);
+                container.appendChild(el);
+            });
+            // Automatically selects the first available channel in the array mapping on boot
+            selectChannel(data.channels[0].id, data.channels[0].name);
+        }
+    }
+
+    // ====================================================================
+    // CONTROL SCHEDULER SWITCH MANAGER (selectChannel)
+    // Role: Destroys legacy background tasks and registers the strict 0.5s incremental engine loop.
+    // ====================================================================
+    async function selectChannel(id, name) {
+        if(activeChannelId === id && document.getElementById('messageContainer').children.length > 0) return;
+        
+        activeChannelId = id;
+        maxTrackedRowId = 0; // Wipes local index cursor to reload fresh target stack maps
+        document.getElementById('currentChannelName').innerText = `# ${name}`;
+        
+        const items = document.querySelectorAll('.channel-item');
+        items.forEach(item => {
+            if(item.innerText === name) item.classList.add('active');
+            else item.classList.remove('active');
+        });
+
+        // Wipes active thread loops to prevent system thread accumulation
+        if (pollingScheduler) {
+            clearInterval(pollingScheduler);
+        }
+
+        await loadMessages(id);
+        
+        // [⏱️ THE OMEGA 0.5s POLLING SCHEDULER ENGINE]
+        // Dispatches incremental slice package checks to the server every 500 milliseconds.
+        pollingScheduler = setInterval(() => {
+            fetchIncrementalMessages(id);
+        }, 500);
+    }
+
+    // ====================================================================
+    // INTERFACE MANIPULATION: INITIAL HISTORY LOAD (/get-messages)
+    // Role: Wipes current viewing canvases and populates full historical rows, advancing the index cursor.
+    // ====================================================================
+    async function loadMessages(channelId) {
+        const res = await fetch(`/get-messages?channelId=${channelId}`);
+        const data = await res.json();
+        const container = document.getElementById('messageContainer');
+        container.innerHTML = '';
+
+        if(data.messages && data.messages.length > 0) {
+            data.messages.forEach(msg => {
+                appendMessageElement(msg);
+                if (msg.id > maxTrackedRowId) maxTrackedRowId = msg.id; // Advances row cursor matrix
+            });
+        }
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // ====================================================================
+    // HIGH-PERFORMANCE STREAM LOGIC ENGINE (/get-new-messages)
+    // Role: Pulls rows sitting past the cursor index to patch chat lines without full DOM flashing.
+    // ====================================================================
+    async function fetchIncrementalMessages(channelId) {
+        if (!channelId || maxTrackedRowId === 0) return;
+
+        try {
+            const res = await fetch(`/get-new-messages?channelId=${channelId}&lastId=${maxTrackedRowId}`);
+            const data = await res.json();
+
+            if (data.messages && data.messages.length > 0) {
+                const container = document.getElementById('messageContainer');
+                let incomingAppended = false;
+
+                data.messages.forEach(msg => {
+                    // Skips the package parsing loop if matches local echo mapping signature
+                    const logKey = `${msg.username}_${msg.content}`;
+                    if (sentContentsLog.has(logKey)) {
+                        sentContentsLog.delete(logKey);
+                        if (msg.id > maxTrackedRowId) maxTrackedRowId = msg.id;
+                        return;
+                    }
+
+                    const existing = document.getElementById(`msg-${msg.message_id}`);
+                    if(!existing) {
+                        appendMessageElement(msg);
+                        incomingAppended = true;
+                    }
+                    if (msg.id > maxTrackedRowId) maxTrackedRowId = msg.id; // Push pointer forward
+                });
+
+                if (incomingAppended) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        } catch (e) {
+            console.error("Incremental network packet poll failure:", e);
+        }
+    }
+
+    // ====================================================================
+    // DOM INJECTION METHOD (appendMessageElement)
+    // Role: Generates standard structured HTML components for chats and parses media extensions.
+    // ====================================================================
+    function appendMessageElement(msg) {
+        const container = document.getElementById('messageContainer');
+        const row = document.createElement('div');
+        row.className = 'msg-row';
+        row.id = `msg-${msg.message_id || Math.random()}`;
+
+        const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        let contentHtml = `<div class="msg-text">${escapeHtml(msg.content || "")}</div>`;
+        
+        // Checks string configurations to see if a valid raw image wrapper template should render
+        if (msg.content && (msg.content.startsWith('http://') || msg.content.startsWith('https://')) && (msg.content.match(/\.(jpeg|jpg|gif|png)$/) != null)) {
+            contentHtml = `<img src="${msg.content}" class="msg-media">`;
+        }
+
+        row.innerHTML = `
+            <img class="msg-avatar" src="${msg.avatar_url || 'https://cdn.discordapp.com/embed/avatars/0.png'}">
+            <div class="msg-content-box">
+                <div class="msg-meta">
+                    <span class="msg-user">${escapeHtml(msg.username)}</span>
+                    <span class="msg-time">${time}</span>
+                </div>
+                ${contentHtml}
+            </div>
+        `;
+        container.appendChild(row);
+    }
+
+    // ====================================================================
+    // OUTBOUND TRANSACTION MANAGEMENT: TRANSMIT LAYER (/send)
+    // Role: Implements optimistic injection and transmits payload tracks to the Express route layer.
+    // ====================================================================
+    async function sendMessage() {
+        const textInput = document.getElementById('messageInput');
+        const imgInput = document.getElementById('imageInput');
+        const content = textInput.value.trim();
+        const imageUrl = imgInput.value.trim();
+
+        if(!content && !imageUrl) return;
+        if(!activeChannelId) return;
+
+        textInput.value = '';
+        imgInput.value = '';
+
+        // [OPTIMISTIC UI INJECTION VECTOR]
+        // Renders local objects instantly into view bounds before network completion signals.
+        const localMsg = {
+            message_id: 'local-' + Date.now(),
+            username: currentUser.displayName,
+            avatar_url: currentUser.avatarURL,
+            content: imageUrl ? imageUrl : content,
+            created_at: new Date().toISOString()
+        };
+        
+        appendMessageElement(localMsg);
+        const container = document.getElementById('messageContainer');
+        container.scrollTop = container.scrollHeight;
+
+        // Binds data markers to prevent duplicate display rows on incremental fetch ticks
+        const logKey = `${currentUser.displayName}_${localMsg.content}`;
+        sentContentsLog.add(logKey);
+
+        await fetch('/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, channelId: activeChannelId, imageUrl })
+        });
+    }
+
+    // ====================================================================
+    // SECURITY UTILIZATION: HTML SCRIPT INJECTION BARRICADE (escapeHtml)
+    // Role: Converts script markers to entity strings to neutralize malicious XSS execution.
+    // ====================================================================
+    function escapeHtml(str) {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    // Binds structural initiation initialization upon absolute document context availability
+    window.onload = init;
+</script>
 </body>
 </html>
