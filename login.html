@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Backdoor - Sign In</title>
+    <style>
+        /* ====================================================================
+         * GLOBAL AUTH CANVAS STYLES
+         * Role: Centers the target container perfectly inside the dark cyberpunk canvas layout.
+         * ==================================================================== */
+        body {
+            margin: 0; padding: 0; background-color: #0f111a; color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex; justify-content: center; align-items: center; height: 100vh;
+        }
+
+        /* ====================================================================
+         * AUTHENTICATION CONTAINER FRAME
+         * Role: Formats the modular login/registration frame box with distinct shadow overlays.
+         * ==================================================================== */
+        .container {
+            background: #1a1d2e; padding: 35px; border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-width: 380px; width: 100%;
+            border: 1px solid #2f344f; text-align: center;
+        }
+        h1 { font-size: 24px; margin-bottom: 5px; color: #7289da; text-transform: uppercase; letter-spacing: 1px; }
+        p { color: #8a8e9b; font-size: 13px; margin-bottom: 25px; }
+
+        /* ====================================================================
+         * INTERACTIVE INPUT COMPONENTS
+         * Role: Structures form groups, labels, input fields, and handle real-time focus changes.
+         * ==================================================================== */
+        .form-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; font-size: 12px; color: #b9bbbe; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
+        input {
+            width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #23272a;
+            background-color: #202225; color: white; box-sizing: border-box; font-size: 14px;
+        }
+        input:focus { outline: none; border-color: #7289da; }
+
+        /* ====================================================================
+         * TRANSACTION BUTTONS & TOGGLE INTERACTION LINKS
+         * Role: Handles primary network submit dispatches and interface transition layouts.
+         * ==================================================================== */
+        .btn {
+            width: 100%; padding: 12px; border: none; border-radius: 4px;
+            font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 10px;
+            transition: background-color 0.2s;
+        }
+        .btn-primary { background-color: #5865F2; color: white; }
+        .btn-primary:hover { background-color: #4752C4; }
+        .toggle-link { color: #00b0f4; font-size: 13px; margin-top: 20px; display: inline-block; cursor: pointer; text-decoration: none; }
+        
+        /* Error handling display blocks styling */
+        .error-msg { color: #f04747; font-size: 13px; margin-top: 10px; font-weight: bold; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="loginBox">
+    <h1>The Backdoor</h1>
+    <p>Sign in</p>
+    
+    <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="loginUser" placeholder="Enter username">
+    </div>
+    <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="loginPass" placeholder="Enter password">
+    </div>
+    <button class="btn btn-primary" onclick="handleLogin()">Sign in</button>
+    <div class="error-msg" id="loginError"></div>
+    <div class="toggle-link" onclick="switchView('signup')">New? Register!</div>
+</div>
+
+<div class="container" id="signupBox" style="display: none;">
+    <h1>Register</h1>
+    <p>Create a new account</p>
+    
+    <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="regUser" placeholder="Set login username">
+    </div>
+    <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="regPass" placeholder="Set password">
+    </div>
+    <div class="form-group">
+        <label>Display Name</label>
+        <input type="text" id="regDisplay" placeholder="Enter chat nickname">
+    </div>
+    <div class="form-group">
+        <label>Discord ID</label>
+        <input type="text" id="regDiscord" placeholder="Ex: 1464312221591933014">
+    </div>
+    <button class="btn btn-primary" onclick="handleSignup()">Register</button>
+    <div class="error-msg" id="regError"></div>
+    <div class="toggle-link" onclick="switchView('login')">Already have an account? Sign in</div>
+</div>
+
+<script>
+    // ====================================================================
+    // VIEWPORT SWITCH CONTROLLER (switchView)
+    // Role: Toggles active visible container grids and flushes stale error messages.
+    // ====================================================================
+    function switchView(view) {
+        document.getElementById('loginError').style.display = 'none';
+        document.getElementById('regError').style.display = 'none';
+        if(view === 'signup') {
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('signupBox').style.display = 'block';
+        } else {
+            document.getElementById('loginBox').style.display = 'block';
+            document.getElementById('signupBox').style.display = 'none';
+        }
+    }
+
+    // ====================================================================
+    // SERVICE NETWORK DISPATCH: TRANSACTION VERIFICATION (handleLogin)
+    // Role: Serializes user credentials, requests authentication from the server, and routes on success.
+    // ====================================================================
+    async function handleLogin() {
+        const username = document.getElementById('loginUser').value;
+        const password = document.getElementById('loginPass').value;
+        const errDiv = document.getElementById('loginError');
+        errDiv.style.display = 'none';
+
+        const res = await fetch('/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
+            // Re-routes directly into the chat cockpit frame matrix
+            window.location.href = "/";
+        } else {
+            errDiv.innerText = data.error || "Invalid username or password.";
+            errDiv.style.display = 'block';
+        }
+    }
+
+    // ====================================================================
+    // SERVICE NETWORK DISPATCH: PROFILE CREATION (handleSignup)
+    // Role: Submits registration parameters to table rows and loops execution context back to login.
+    // ====================================================================
+    async function handleSignup() {
+        const username = document.getElementById('regUser').value;
+        const password = document.getElementById('regPass').value;
+        const displayName = document.getElementById('regDisplay').value;
+        const discordId = document.getElementById('regDiscord').value;
+        const errDiv = document.getElementById('regError');
+        errDiv.style.display = 'none';
+
+        const res = await fetch('/auth/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, displayName, discordId })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
+            alert('Registration completed successfully!');
+            switchView('login');
+        } else {
+            errDiv.innerText = data.error || "Failed to register profile.";
+            errDiv.style.display = 'block';
+        }
+    }
+</script>
+</body>
+</html>
