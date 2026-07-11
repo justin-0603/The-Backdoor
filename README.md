@@ -1,5 +1,6 @@
 # The-Backdoor
-Chat with your friends on school wifi! It is also connected to discord!
+Use discord on school wifi!
+
 Instructions:
 - Create Supbase account, and make a database
 - Paste the file "SQL Code" into SQL Editor
