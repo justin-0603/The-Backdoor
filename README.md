@@ -1,5 +1,8 @@
 # The-Backdoor
-A program made to use discord on restricted wifi. On restricted wifi, you can chat on web.On unrestricted wifi, you can continue your chat on normal discord. Available on School chromebook.
+A program made to use discord on restricted wifi. 
+On restricted wifi, you can chat on web.
+On unrestricted wifi, you can continue your chat on normal discord.
+Available on School chromebook.
 
 Instructions:
 - Create Supbase account, and make a database
